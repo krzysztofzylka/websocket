@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>WebSocket Demo Client</title>
+    <style>
+        body { font-family: sans-serif; max-width: 640px; margin: 2rem auto; }
+        #log { border: 1px solid #ccc; padding: 1rem; height: 240px; overflow-y: auto; white-space: pre-wrap; background: #f9f9f9; }
+        label { display: block; margin-bottom: 0.5rem; }
+        input, button { font-size: 1rem; padding: 0.5rem; }
+    </style>
+</head>
+<body>
+<h1>WebSocket Demo Client</h1>
+
+<label>
+    Server URL:
+    <input id="url" type="text" value="ws://127.0.0.1:8088?token=secret-token">
+</label>
+
+<button id="connect">Connect</button>
+<button id="disconnect" disabled>Disconnect</button>
+
+<h2>Messages</h2>
+<div id="log"></div>
+
+<label>
+    Send message:
+    <input id="message" type="text" placeholder="Type message…" disabled>
+</label>
+<button id="send" disabled>Send</button>
+
+<script>
+    const urlInput = document.getElementById('url');
+    const messageInput = document.getElementById('message');
+    const log = document.getElementById('log');
+    const connectBtn = document.getElementById('connect');
+    const disconnectBtn = document.getElementById('disconnect');
+    const sendBtn = document.getElementById('send');
+
+    let socket = null;
+
+    function logLine(text) {
+        const time = new Date().toLocaleTimeString();
+        log.textContent += `[${time}] ${text}\n`;
+        log.scrollTop = log.scrollHeight;
+    }
+
+    connectBtn.addEventListener('click', () => {
+        const url = urlInput.value.trim();
+        if (!url) {
+            return;
+        }
+
+        socket = new WebSocket(url);
+        logLine(`Connecting to ${url}…`);
+
+        socket.addEventListener('open', () => {
+            logLine('Connected.');
+            connectBtn.disabled = true;
+            disconnectBtn.disabled = false;
+            sendBtn.disabled = false;
+            messageInput.disabled = false;
+        });
+
+        socket.addEventListener('message', (event) => {
+            logLine(`← ${event.data}`);
+        });
+
+        socket.addEventListener('close', (event) => {
+            logLine(`Connection closed (code=${event.code}, reason=${event.reason || '(none)'})`);
+            connectBtn.disabled = false;
+            disconnectBtn.disabled = true;
+            sendBtn.disabled = true;
+            messageInput.disabled = true;
+        });
+
+        socket.addEventListener('error', (event) => {
+            logLine('WebSocket error (check console).');
+            console.error(event);
+        });
+    });
+
+    disconnectBtn.addEventListener('click', () => {
+        if (socket) {
+            logLine('Closing connection…');
+            socket.close(1000, 'Client disconnect');
+        }
+    });
+
+    sendBtn.addEventListener('click', () => {
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
+            return;
+        }
+
+        const text = messageInput.value;
+        socket.send(text);
+        logLine(`→ ${text}`);
+        messageInput.value = '';
+        messageInput.focus();
+    });
+
+    messageInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+            sendBtn.click();
+        }
+    });
+</script>
+</body>
+</html>
