@@ -589,6 +589,32 @@ class Server
         return array_values($this->connections);
     }
 
+    public function findConnectionsByLabel(string $label): array
+    {
+        $matches = [];
+
+        foreach ($this->connections as $connection) {
+            if ($connection->getLabel() === $label) {
+                $matches[] = $connection;
+            }
+        }
+
+        return $matches;
+    }
+
+    public function findConnectionsByProperty(string $name, mixed $value): array
+    {
+        $matches = [];
+
+        foreach ($this->connections as $connection) {
+            if ($connection->hasProperty($name) && $connection->getProperty($name) === $value) {
+                $matches[] = $connection;
+            }
+        }
+
+        return $matches;
+    }
+
     /**
      * Broadcasts a message to all active connections.
      */
@@ -698,7 +724,7 @@ class Server
      */
     public function notifyOpen(Connection $connection): void
     {
-        $id = spl_object_id($connection);
+        $id = $connection->getId();
         $this->connectionsOpened[$id] = true;
 
         $this->log('INFO', 'Connection opened.', [
@@ -718,7 +744,7 @@ class Server
     public function notifyMessage(Connection $connection, string $payload, bool $isText): void
     {
         $this->log('DEBUG', 'Received message.', [
-            'connection_id' => spl_object_id($connection),
+            'connection_id' => $connection->getId(),
             'type' => $isText ? 'text' : 'binary',
             'length' => strlen($payload),
         ]);
@@ -780,7 +806,7 @@ class Server
     public function notifyError(Connection $connection, \Throwable $error): void
     {
         $this->log('ERROR', $error->getMessage(), [
-            'connection_id' => spl_object_id($connection),
+            'connection_id' => $connection->getId(),
             'exception' => get_class($error),
         ]);
 
@@ -794,7 +820,7 @@ class Server
      */
     public function notifyClose(Connection $connection, int $code, string $reason): void
     {
-        $id = spl_object_id($connection);
+        $id = $connection->getId();
 
         if (isset($this->connections[$id])) {
             unset($this->connections[$id]);
@@ -904,7 +930,7 @@ class Server
         stream_set_blocking($client, false);
 
         $connection = new Connection($this, $this->loop, $client, $this->getConnectionOptions());
-        $id = spl_object_id($connection);
+        $id = $connection->getId();
         $this->connections[$id] = $connection;
         $this->connectionsAcceptedTotal++;
 
