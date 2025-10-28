@@ -26,6 +26,8 @@ class Connection
     /** @var resource */
     private $stream;
 
+    private string $id;
+
     private LoopInterface $loop;
 
     private Server $server;
@@ -53,6 +55,10 @@ class Connection
     private array $queryParameters = [];
 
     private ?string $subprotocol = null;
+
+    private ?string $label = null;
+
+    private array $properties = [];
 
     private ?int $fragmentOpcode = null;
 
@@ -110,6 +116,7 @@ class Connection
         $this->server = $server;
         $this->loop = $loop;
         $this->stream = $stream;
+        $this->id = (string)spl_object_id($this);
         $this->maxMessageSize = max(1, (int)($options['max_message_size'] ?? $server->getMaxMessageSize()));
         $this->binaryStreamThreshold = max(1, (int)($options['binary_stream_threshold'] ?? $server->getBinaryStreamThreshold()));
         $this->compressionAllowed = (bool)($options['compression_enabled'] ?? $server->isCompressionEnabled());
@@ -122,6 +129,12 @@ class Connection
         $this->adaptiveMemoryTolerance = max(1, (int)($options['adaptive_memory_tolerance'] ?? (8 * 1024 * 1024)));
         $this->loggingEnabled = (bool)($options['logging'] ?? false);
         $this->maxDecompressionRatio = max(1.0, (float)($options['max_decompression_ratio'] ?? 20.0));
+        if (isset($options['connection_label'])) {
+            $this->label = (string)$options['connection_label'];
+        }
+        if (isset($options['connection_properties']) && is_array($options['connection_properties'])) {
+            $this->properties = $options['connection_properties'];
+        }
         stream_set_blocking($this->stream, false);
 
         if ($this->adaptiveTextStreaming) {
@@ -137,6 +150,46 @@ class Connection
     public function getStream()
     {
         return $this->stream;
+    }
+
+    public function getId(): string
+    {
+        return $this->id;
+    }
+
+    public function setLabel(?string $label): void
+    {
+        $this->label = $label;
+    }
+
+    public function getLabel(): ?string
+    {
+        return $this->label;
+    }
+
+    public function setProperty(string $name, mixed $value): void
+    {
+        $this->properties[$name] = $value;
+    }
+
+    public function getProperty(string $name, mixed $default = null): mixed
+    {
+        return $this->properties[$name] ?? $default;
+    }
+
+    public function hasProperty(string $name): bool
+    {
+        return array_key_exists($name, $this->properties);
+    }
+
+    public function removeProperty(string $name): void
+    {
+        unset($this->properties[$name]);
+    }
+
+    public function getProperties(): array
+    {
+        return $this->properties;
     }
 
     public function getPath(): ?string

@@ -37,12 +37,16 @@ $server->enableLogging(true);
 $server->setAdaptiveMemoryTarget(64 * 1024 * 1024, 8 * 1024 * 1024);
 
 $server->onOpen(function (Connection $connection): void {
-    $connection->sendText('Welcome!');
+    $connection->setProperty('user_id', 123);
+    $connection->setLabel('authenticated-user');
+
+    $connection->sendText('Welcome! Your connection id is ' . $connection->getId());
 });
 
 $server->onMessage(function (Connection $connection, string $payload, bool $isText): void {
     if ($isText) {
-        $connection->sendText('[echo] ' . $payload);
+        $userId = $connection->getProperty('user_id');
+        $connection->sendText(sprintf('[echo][user:%s] %s', $userId ?? 'guest', $payload));
     }
 });
 
@@ -130,6 +134,39 @@ echo 'Pending: ' . $server->getPendingConnectionCount();
 
 Po przekroczeniu limitu nowe gniazda trafiają do kolejki FIFO. Gdy zwolni się miejsce, serwer automatycznie zacznie obsługiwać oczekujące połączenia. Jeśli kolejka osiągnie limit, klient otrzyma odpowiedź 503 i gniazdo zostanie zamknięte.
 
+### Identyfikacja i metadane połączeń
+
+Każde połączenie otrzymuje unikalny identyfikator (`Connection::getId()`), który możesz wykorzystać w logach lub jako klucz w mapach. Dodatkowo połączenia udostępniają etykietę i dowolne właściwości, dzięki czemu łatwo przypiszesz np. identyfikator użytkownika:
+
+```php
+$server->onOpen(function (Connection $connection) use ($userService): void {
+    $token = $connection->getQueryParameter('token');
+    if ($token !== null && ($userId = $userService->resolve($token))) {
+        $connection->setProperty('user_id', $userId);
+        $connection->setLabel('user:' . $userId);
+    }
+});
+
+$server->onMessage(function (Connection $connection, string $payload, bool $isText) {
+    $userId = $connection->getProperty('user_id', 'guest');
+    printf("[%s] %s\n", $connection->getId(), $payload);
+});
+
+foreach ($server->getConnections() as $connection) {
+    echo $connection->getLabel() ?? $connection->getId();
+}
+
+// znajdź połączenia po etykiecie lub właściwości
+$admins = $server->findConnectionsByLabel('user:admin');
+$user123 = $server->findConnectionsByProperty('user_id', 123);
+
+foreach ($user123 as $conn) {
+    $conn->sendText('Personalized notification');
+}
+```
+
+Metadane są przechowywane tylko w pamięci i usuwane automatycznie przy zamknięciu połączenia.
+
 ### Statystyki runtime
 
 ```php
@@ -167,6 +204,7 @@ $server->resetStats();
 - `Connection::sendText(string $payload)` / `Connection::sendBinary(string $payload)` – wysyłanie do pojedynczego klienta.
 - Obsługa zdarzeń: `onOpen`, `onMessage`, `onClose`, `onError`, `onPing`, `onPong`.
 - Dostęp do informacji o kliencie: `Connection::getPath()`, `Connection::getHeaders()`, `Connection::getQueryParameters()`, `Connection::getSubprotocol()`.
+- Identyfikacja i metadane: `Connection::getId()`, `Connection::setLabel()/getLabel()`, `Connection::setProperty()/getProperty()/hasProperty()/removeProperty()`, `Connection::getProperties()`.
 - Konfiguracja TLS i kompresji: `enableTls`, `setTlsCryptoMethod`, `enableCompression`, `setCompressionContextTakeover`, `setCompressionMinBytes`.
 - Limity i strumieniowanie: `setMaxMessageSize`, `setBinaryStreamThreshold`, `setTextStreamThreshold`, `onBinaryStream`.
 - Bezpieczeństwo: `setAllowedOrigins`, `requireOriginHeader`, `setAuthValidator`.
